@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/remote/remote-transport" },
+    { "path": "packages/remote/transport-ssh" },
+    { "path": "packages/remote/transport-mosh" },
+    { "path": "packages/remote/transport-sam" },
+    { "path": "packages/fs/fs-ssh" },
+    { "path": "packages/shell/bash-ssh" }
+  ]
+}

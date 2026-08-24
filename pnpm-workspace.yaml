@@ -1,0 +1,10 @@
+packages:
+  - packages/remote/*
+  - packages/fs/*
+  - packages/shell/*
+
+allowBuilds:
+  esbuild: true
+
+onlyBuiltDependencies:
+  - esbuild
