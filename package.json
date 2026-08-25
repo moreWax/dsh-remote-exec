@@ -71,5 +71,8 @@
     "remote-execution",
     "sam",
     "ssh"
-  ]
+  ],
+  "engines": {
+    "node": ">=22"
+  }
 }
