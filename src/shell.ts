@@ -1,41 +1,29 @@
 /**
- * SSH bash executor: implements the ShellExecutor seam over a
- * ctx.remoteTransport. Foreground runs honor timeout, abort, stdin and
- * exit-code semantics; background processes stream through a local ssh child.
- * @module @deepseek-ai/dsh-bash-ssh
+ * Remote shell provider: implements dsh's ShellExecutor seam over a
+ * RemoteTransport. Foreground runs honor timeout, abort, stdin and exit-code
+ * semantics; background processes stream through a local child.
  */
 import { spawn } from 'node:child_process'
 import type { Context } from '@deepseek-ai/cordis'
-import '@morewax/dsh-remote-transport'
 import { ShellExecutor } from '@deepseek-ai/dsh-shell'
 import type {
-  ShellExecRequest,
-  ShellExecSpec,
-  ShellProcess,
-  ShellProcessRead,
-  ShellRunResult,
+  ShellExecRequest, ShellExecSpec, ShellProcess, ShellProcessRead, ShellRunResult,
 } from '@deepseek-ai/dsh-shell'
-
-export interface Config {
-  /** Base working directory on the remote world. */
-  root: string
-  /** Default foreground timeout in ms. */
-  defaultTimeoutMs?: number
-}
+import { shellQuote } from './transport.js'
+import type { RemoteTransport } from './transport.js'
 
 const DEFAULT_TIMEOUT = 120000
 const MAX_OUTPUT = 200000
 
-function shq(s: string): string {
-  return `'${s.replaceAll("'", '\'\\\'\'')}'`
-}
+const shq = shellQuote
 
-export class SshBashExecutor extends ShellExecutor {
+export class RemoteShell extends ShellExecutor {
   declare readonly ctx: Context
 
   constructor(
     ctx: Context,
-    private readonly cfg: Config,
+    private readonly transport: RemoteTransport,
+    private readonly cfg: { root: string; defaultTimeoutMs?: number },
   ) {
     super(ctx)
   }
@@ -44,7 +32,10 @@ export class SshBashExecutor extends ShellExecutor {
     return {
       command: request.command,
       workdir: request.workdir ?? this.cfg.root,
-      timeoutMs: Math.min(request.timeoutMs ?? this.cfg.defaultTimeoutMs ?? DEFAULT_TIMEOUT, DEFAULT_TIMEOUT * 10),
+      timeoutMs: Math.min(
+        request.timeoutMs ?? this.cfg.defaultTimeoutMs ?? DEFAULT_TIMEOUT,
+        DEFAULT_TIMEOUT * 10,
+      ),
       stdoutMaxBytes: request.stdoutMaxBytes ?? MAX_OUTPUT,
       signal: request.signal,
       stdin: request.stdin,
@@ -55,7 +46,7 @@ export class SshBashExecutor extends ShellExecutor {
   }
 
   async run(spec: ShellExecSpec): Promise<ShellRunResult> {
-    const r = await this.ctx.remoteTransport.exec({
+    const r = await this.transport.exec({
       command: spec.command,
       workdir: spec.workdir,
       stdin: spec.stdin,
@@ -75,12 +66,13 @@ export class SshBashExecutor extends ShellExecutor {
   }
 
   start(spec: ShellExecSpec): ShellProcess {
-    // Background jobs keep a local ssh child streaming the remote process;
-    // killing the local child closes the channel and signals the remote side.
-    const child = spawn('ssh', ['-o', 'BatchMode=yes', '-', shq(`cd ${shq(spec.workdir)} && ${spec.command}`)], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-    })
-    child.stdin.end(spec.stdin)
+    // Background jobs keep a local child streaming the remote process; killing
+    // the local child closes the channel and signals the remote side.
+    const child = spawn('ssh', [
+      '-o', 'BatchMode=yes', '-',
+      shq(`cd ${shq(spec.workdir)} && ${spec.command}`),
+    ], { stdio: ['pipe', 'pipe', 'pipe'] })
+    child.stdin.end(spec.stdin ?? '')
 
     let status: 'running' | 'completed' | 'killed' = 'running'
     let exitCode: number | null = null
@@ -112,7 +104,7 @@ export class SshBashExecutor extends ShellExecutor {
       get signal() { return sig },
       done,
       readOutput(): ShellProcessRead {
-        const delta = stdoutBuf + (stderrBuf ? `\n[stderr]\n${stderrBuf}` : '')
+        const delta = stdoutBuf + (stderrBuf !== '' ? `\n[stderr]\n${stderrBuf}` : '')
         const wasLossy = lossy
         stdoutBuf = ''
         stderrBuf = ''
@@ -127,11 +119,4 @@ export class SshBashExecutor extends ShellExecutor {
       },
     }
   }
-}
-
-export const name = 'bash-ssh'
-export const inject = ['remoteTransport'] as const
-
-export function apply(ctx: Context, config: Config): void {
-  ctx.shell = new SshBashExecutor(ctx, config)
 }

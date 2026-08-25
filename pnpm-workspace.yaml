@@ -1,10 +1,6 @@
-packages:
-  - packages/remote/*
-  - packages/fs/*
-  - packages/shell/*
-
+# Settings only (single-package repo — no workspace members needed).
+packages: []
 allowBuilds:
   esbuild: true
-
 onlyBuiltDependencies:
   - esbuild

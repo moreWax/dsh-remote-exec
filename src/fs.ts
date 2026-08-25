@@ -1,51 +1,35 @@
 /**
- * SSH filesystem provider: implements the FileSystem seam over a
- * ctx.remoteTransport, so the agent's file tools operate on a remote
- * execution world while dsh runs locally.
+ * Remote filesystem provider: implements dsh's FileSystem seam over a
+ * RemoteTransport, so the agent's file tools operate on the remote world.
  *
  * Target identity: the remote absolute path. Freshness: `size:mtime` from
- * remote stat. Writes are atomic (temp + rename) and guarded per the write
- * intent contract.
- * @module @deepseek-ai/dsh-fs-ssh
+ * remote stat. Writes are atomic (temp + rename) and intent-guarded.
  */
 import type { Context } from '@deepseek-ai/cordis'
-import {
-  FileSystem,
-  FsError,
-  FsTargetKey,
-  FsVersion,
-} from '@deepseek-ai/dsh-fs'
+import { FileSystem, FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import type {
-  FsDirEntry,
-  FsEditOutcome,
-  FsEditRequest,
-  FsInfo,
-  FsPathInfo,
-  FsTarget,
-  FsVersion as FsVersionT,
-  FsWriteIntent,
-  FsWriteOutcome,
+  FsDirEntry, FsEditOutcome, FsEditRequest, FsInfo, FsPathInfo, FsTarget,
+  FsVersion as FsVersionT, FsWriteIntent, FsWriteOutcome,
 } from '@deepseek-ai/dsh-fs'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
-import { shellQuote } from '@morewax/dsh-remote-transport'
-
-export interface Config {
-  /** Base directory for relative path resolution on the remote world. */
-  root: string
-}
+import { shellQuote } from './transport.js'
+import type { RemoteTransport } from './transport.js'
 
 const q = shellQuote
 
-export class SshFileSystem extends FileSystem {
+export class RemoteFileSystem extends FileSystem {
   declare readonly ctx: Context
 
-  constructor(ctx: Context, private readonly cfg: Config) {
+  constructor(
+    ctx: Context,
+    private readonly transport: RemoteTransport,
+    private readonly cfg: { root: string },
+  ) {
     super(ctx)
-    void this.cfg
   }
 
   private async run(command: string): Promise<{ code: number | null; out: string; err: string }> {
-    const r = await this.ctx.remoteTransport.exec({ command })
+    const r = await this.transport.exec({ command })
     return { code: r.exitCode, out: r.stdout, err: r.stderr }
   }
 
@@ -58,7 +42,7 @@ export class SshFileSystem extends FileSystem {
   }
 
   processPath(target: FsTarget): string { return target.displayPath }
-  fileUrl(target: FsTarget): string { return `ssh-file://${target.displayPath}` }
+  fileUrl(target: FsTarget): string { return `remote-file://${target.displayPath}` }
   contains(parent: FsTarget, child: FsTarget): boolean {
     return child.displayPath === parent.displayPath ||
       child.displayPath.startsWith(parent.displayPath.replace(/\/$/, '') + '/')
@@ -88,7 +72,6 @@ export class SshFileSystem extends FileSystem {
 
   async lstat(path: string, opts?: { cwd?: string }): Promise<FsPathInfo | undefined> {
     const t = await this.resolve(path, opts)
-    // -c without -L: do not follow the final component.
     const r = await this.run(`stat -c ${q('%s %Y %f')} -- ${q(t.displayPath)} 2>/dev/null || echo MISSING`)
     const line = r.out.trim()
     if (line === 'MISSING' || line === '') return undefined
@@ -96,8 +79,8 @@ export class SshFileSystem extends FileSystem {
     const mode = parseInt(hex, 16)
     const kind = (mode & 0o170000) === 0o040000 ? 'directory'
       : (mode & 0o170000) === 0o100000 ? 'file'
-        : (mode & 0o170000) === 0o120000 ? 'symlink' : 'other'
-    return { version: FsVersion(`${size}:${mtime}`), type: kind, size: Number(size) }
+      : (mode & 0o170000) === 0o120000 ? 'symlink' : 'other'
+    return { version: FsVersion(`${size}:${mtime}`), type: kind as FsPathInfo['type'], size: Number(size) }
   }
 
   async readText(target: FsTarget): Promise<string> {
@@ -119,7 +102,7 @@ export class SshFileSystem extends FileSystem {
   }
 
   private async readBytesImpl(abs: string, maxBytes: number): Promise<Uint8Array> {
-    const bytes = await this.ctx.remoteTransport.readFile(abs, maxBytes + 1)
+    const bytes = await this.transport.readFile(abs, maxBytes + 1)
     if (bytes.length > maxBytes) throw new FsError(`exceeds ${maxBytes} byte read cap`, 'FS_IO_ERROR')
     return bytes
   }
@@ -128,8 +111,8 @@ export class SshFileSystem extends FileSystem {
     const dir = target.displayPath
     const r = await this.run(
       `cd ${q(dir)} && for e in * .[!.]* ..?*; do ` +
-      '[ -e "$e" ] || continue; ' +
-      'printf \'%s\\t%s\\n\' "$e" "$(stat -L -c %F -- "$e")"; done',
+      `[ -e "$e" ] || continue; ` +
+      `printf '%s\\t%s\\n' "$e" "$(stat -L -c %F -- "$e")"; done`,
     )
     if (r.code !== 0) throw new FsError(`listDir failed: ${r.err.slice(0, 200)}`, 'FS_NOT_DIRECTORY')
     const entries: FsDirEntry[] = []
@@ -139,7 +122,7 @@ export class SshFileSystem extends FileSystem {
       const type = kind.includes('directory') ? 'directory' : kind.includes('regular') ? 'file' : 'other'
       entries.push({
         name,
-        type: type,
+        type: type as FsDirEntry['type'],
         target: { targetKey: FsTargetKey(`${dir}/${name}`), displayPath: `${dir}/${name}` },
       })
     }
@@ -160,7 +143,6 @@ export class SshFileSystem extends FileSystem {
       before = new TextDecoder().decode(await this.readBytesImpl(abs, Number.MAX_SAFE_INTEGER))
         .replaceAll('\r\n', '\n')
     }
-    // intent guards
     if (expected?.kind === 'createIfAbsent' && current) throw new FsError('exists', 'FS_NOT_OBSERVED')
     if (expected?.kind === 'replaceIfVersion') {
       if (!current) throw new FsError('target vanished', 'FS_STALE_VERSION')
@@ -168,11 +150,11 @@ export class SshFileSystem extends FileSystem {
       if (now !== expected.version) throw new FsError('version mismatch', 'FS_STALE_VERSION')
     }
     const normalized = content.replaceAll('\r\n', '\n')
-    await this.ctx.remoteTransport.writeFileAtomic(abs, new TextEncoder().encode(normalized))
+    await this.transport.writeFileAtomic(abs, new TextEncoder().encode(normalized))
     const afterStat = await this.statRaw(abs)
     return {
       operation: current ? 'update' : 'create',
-      version: FsVersion(afterStat ? `${afterStat.size}:${afterStat.mtime}` : 'unknown'),
+      version: FsVersion(afterStat !== undefined ? `${afterStat.size}:${afterStat.mtime}` : 'unknown'),
       before,
       after: normalized,
     }
@@ -184,9 +166,9 @@ export class SshFileSystem extends FileSystem {
     expected?: { version: FsVersionT },
   ): Promise<FsEditOutcome> {
     const before = await this.readText(target)
-    if (expected) {
+    if (expected !== undefined) {
       const info = await this.stat(target)
-      if (!info || info.version !== expected.version) throw new FsError('stale', 'FS_STALE_VERSION')
+      if (info === undefined || info.version !== expected.version) throw new FsError('stale', 'FS_STALE_VERSION')
     }
     const count = before.split(edit.oldString).length - 1
     if (count === 0) throw new FsError('oldString not found', 'FS_EDIT_NOT_FOUND')
@@ -197,11 +179,4 @@ export class SshFileSystem extends FileSystem {
     const outcome = await this.writeText(target, after)
     return { version: outcome.version, before, after }
   }
-}
-
-export const name = 'fs-ssh'
-export const inject = ['remoteTransport'] as const
-
-export function apply(ctx: Context, config: Config): void {
-  ctx.fs = new SshFileSystem(ctx, config)
 }

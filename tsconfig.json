@@ -1,11 +1,17 @@
 {
-  "files": [],
-  "references": [
-    { "path": "packages/remote/remote-transport" },
-    { "path": "packages/remote/transport-ssh" },
-    { "path": "packages/remote/transport-mosh" },
-    { "path": "packages/remote/transport-sam" },
-    { "path": "packages/fs/fs-ssh" },
-    { "path": "packages/shell/bash-ssh" }
-  ]
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2022"],
+    "types": ["node"],
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true
+  },
+  "include": ["src", "tests"]
 }

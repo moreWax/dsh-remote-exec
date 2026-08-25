@@ -1,37 +1,26 @@
 /**
- * SAM mesh transport provider: exec and file IO executed on a remote mesh
- * peer through a companion tool server (sam-exec-fs), reached via the local
- * sam-node MCP endpoint.
+ * SAM driver: exec and file IO on a remote mesh peer through a companion tool
+ * server (sam-exec-fs), reached via the local sam-node MCP endpoint.
  *
- * Auth: delegated to the mesh. Interactive terminals are not supported by
- * this driver; use transport-mosh for roaming PTYs.
- * @module @morewax/dsh-transport-sam
+ * Auth: delegated to the mesh — no keys or tokens in this process when riding
+ * the local Unix socket. A preflight check proves the endpoint speaks the
+ * sam-node API before any credential is sent, so a foreign service that has
+ * claimed the port can never receive our token.
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
-import { RemoteTransport } from '@morewax/dsh-remote-transport'
-import type {
-  TransportExecRequest,
-  TransportExecResult,
-} from '@morewax/dsh-remote-transport'
+import { RemoteTransport } from '../transport.js'
+import type { TransportExecRequest, TransportExecResult } from '../transport.js'
 
-export interface Config {
-  /** MCP endpoint of the local sam-node. Default: http://127.0.0.1:8080/mcp.
-   *  The endpoint is verified to speak the sam-node API before any credential
-   *  is sent; a foreign service on that port fails the driver loudly. */
+export interface SamDriverConfig {
   mcpUrl?: string
-  /** Bearer token for the node API; omit when authenticating over the Unix socket. */
   token?: string
-  /** Namespaced tool prefix exposed by the remote sam-exec-fs server, e.g. 'execfs'. */
   servicePrefix: string
-  /** Peer id hosting the tool server; omit to let the mesh router choose. */
   peerId?: string
-  /** Default command timeout in ms. */
   defaultTimeoutMs?: number
 }
 
@@ -54,7 +43,7 @@ export class SamTransport extends RemoteTransport {
   private readonly mcpUrl: string
   private readonly token: string | undefined
 
-  constructor(ctx: Context, private readonly cfg: Config) {
+  constructor(ctx: Context, private readonly cfg: SamDriverConfig) {
     super(ctx, 'remoteTransport')
     this.mcpUrl = cfg.mcpUrl ?? 'http://127.0.0.1:8080/mcp'
     this.token =
@@ -79,16 +68,16 @@ export class SamTransport extends RemoteTransport {
       })
       body = await res.text()
     } catch (e) {
-      throw new Error(`transport-sam: cannot reach sam-node at ${origin} (${String(e)})`)
+      throw new Error(`dsh-remote-exec: cannot reach sam-node at ${origin} (${String(e)})`)
     }
     try {
       const parsed: unknown = JSON.parse(body)
       if (!Array.isArray(parsed)) throw new Error('not an array')
     } catch {
       throw new Error(
-        `transport-sam: ${origin} does not speak the sam-node API ` +
-        `(GET /v1/models was not JSON). Refusing to send credentials to an unknown service. ` +
-        `If sam-node uses another port, set mcpUrl explicitly.`,
+        `dsh-remote-exec: ${origin} does not speak the sam-node API ` +
+        '(GET /v1/models was not JSON). Refusing to send credentials to an unknown service. ' +
+        'If sam-node uses another port, set mcpUrl explicitly.',
       )
     }
   }
@@ -96,7 +85,7 @@ export class SamTransport extends RemoteTransport {
   private async ensureClient(): Promise<Client> {
     if (this.client !== undefined) return this.client
     await this.preflight()
-    const client = new Client({ name: 'dsh-transport-sam', version: '0.1.0' })
+    const client = new Client({ name: 'dsh-remote-exec', version: '0.1.0' })
     const requestInit =
       this.token === undefined
         ? {}
@@ -144,8 +133,7 @@ export class SamTransport extends RemoteTransport {
 
   streamInteractive(_command: string): { child: never } {
     throw new Error(
-      'transport-sam does not support interactive terminals — use @morewax/dsh-transport-mosh for roaming PTYs',
+      'the sam driver does not support interactive terminals — use driver: mosh for roaming PTYs',
     )
   }
 }
-

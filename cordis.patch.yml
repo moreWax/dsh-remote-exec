@@ -1,0 +1,32 @@
+# dsh-remote-exec: run the harness locally, execute on your server.
+#
+# The fs-sandbox and bash-local rows REPLACE the dsh-base rows by id
+# (last write wins): the agent's file tools and shell now operate in the
+# remote execution world instead of locally.
+#
+# Env seams:
+#   DSH_REMOTE_DRIVER  ssh | mosh | sam        (default ssh)
+#   DSH_REMOTE_HOST    remote host / MagicDNS name
+#   DSH_REMOTE_USER    remote user
+#   DSH_REMOTE_ROOT    remote workspace root   (default ~)
+#   DSH_REMOTE_TAILSCALE  'true' to route via `tailscale ssh` (keyless)
+#   SAM_TOKEN          sam-node token (driver: sam, when not on the socket)
+
+- id: remote-exec
+  name: '@morewax/dsh-remote-exec'
+  config:
+    driver: !!js (process.env.DSH_REMOTE_DRIVER || 'ssh')
+    host: !!js process.env.DSH_REMOTE_HOST || ''
+    user: !!js process.env.DSH_REMOTE_USER || ''
+    root: !!js process.env.DSH_REMOTE_ROOT || '~'
+    tailscale: !!js process.env.DSH_REMOTE_TAILSCALE === 'true'
+
+- id: fs-sandbox
+  name: '@morewax/dsh-remote-exec/fs'
+  config:
+    root: !!js process.env.DSH_REMOTE_ROOT || '~'
+
+- id: bash-local
+  name: '@morewax/dsh-remote-exec/shell'
+  config:
+    root: !!js process.env.DSH_REMOTE_ROOT || '~'
