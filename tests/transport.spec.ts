@@ -3,39 +3,12 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { SamTransport, shellQuote } from '../src/index.js'
+import { shellQuote } from '../src/index.js'
 
 describe('shellQuote', () => {
   it('wraps in single quotes and escapes embedded quotes', () => {
     expect(shellQuote("it's")).toBe("'it'\\''s'")
     expect(shellQuote('plain')).toBe("'plain'")
-  })
-})
-
-describe('sam driver credential guard', () => {
-  it('refuses to authenticate against a foreign service on the port', async () => {
-    const ctx = new Context()
-    const t = new SamTransport(ctx, {
-      mcpUrl: 'http://127.0.0.1:9/mcp',   // nothing there; preflight must fail
-      servicePrefix: 'execfs',
-      token: 'secret-token-value',
-    })
-    await expect(t.exec({ command: 'echo pwned' })).rejects.toThrow(/cannot reach sam-node|does not speak/)
-  })
-})
-
-// Opt-in live check against a real non-SAM service (e.g. a GitLab container
-// squatting on 8080): the driver must refuse before sending credentials.
-const LIVE = process.env.DSH_SAM_LIVE === '1'
-describe.skipIf(!LIVE)('sam credential guard (live)', () => {
-  it('refuses a foreign service at the configured mcpUrl', async () => {
-    const ctx = new Context()
-    const t = new SamTransport(ctx, {
-      mcpUrl: process.env.DSH_SAM_MCP_URL ?? 'http://127.0.0.1:8080/mcp',
-      servicePrefix: 'execfs',
-      token: 'secret-token',
-    })
-    await expect(t.exec({ command: 'echo pwned' })).rejects.toThrow()
   })
 })
 

@@ -14,9 +14,6 @@ Do not open a public issue for security reports.
 
 - Config files must never contain secret values (env/managed-store references
   only) — a regression here is a security bug.
-- The sam driver must never send credentials to a non-SAM endpoint (enforced
-  by preflight) — a bypass is a security bug.
-- MCP content is untrusted input at a network boundary.
 
 ## Supported versions
 

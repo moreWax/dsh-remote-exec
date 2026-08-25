@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
-import { RemoteShell, RemoteTransport, SamTransport, apply } from '../src/index.js'
+import { RemoteShell, RemoteTransport, apply } from '../src/index.js'
 import { collect } from '../src/transport.js'
 import type { TransportExecRequest, TransportExecResult } from '../src/index.js'
 
@@ -49,23 +49,6 @@ describe('public provider characterization', () => {
     expect(() => apply(new Context(), config)).toThrow(error)
   })
 })
-
-describe('SAM token preflight characterization', () => {
-  it('never includes credentials in the identity preflight request', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response('<html>foreign service</html>', { status: 200 }),
-    )
-    const transport = new SamTransport(new Context(), {
-      mcpUrl: 'http://foreign.test:8080/mcp', servicePrefix: 'execfs', token: 'top-secret',
-    })
-    await expect(transport.exec({ command: 'true' })).rejects.toThrow(/does not speak/)
-    const init = fetchMock.mock.calls[0]?.[1]
-    expect(new Headers(init?.headers).has('authorization')).toBe(false)
-    expect(new Headers(init?.headers).has('x-sam-authentication')).toBe(false)
-    fetchMock.mockRestore()
-  })
-})
-
 
 describe('process collection characterization', () => {
   it('terminates a child immediately when passed an already-aborted signal', async () => {

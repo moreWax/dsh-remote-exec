@@ -1,6 +1,6 @@
 {
   "name": "@morewax/dsh-remote-exec",
-  "description": "Run DeepSeek Harness locally, execute on your server \u2014 ssh / mosh / sam transports with remote file and shell tools",
+  "description": "Run DeepSeek Harness locally, execute on your server \u2014 SSH/mosh transports with remote file and shell tools",
   "version": "0.1.0",
   "license": "MIT",
   "type": "module",
@@ -49,9 +49,6 @@
     "@deepseek-ai/dsh-shell": ">=0.1.1-rc.2",
     "@deepseek-ai/dsh-invariants": ">=0.0.1-rc.1"
   },
-  "dependencies": {
-    "@modelcontextprotocol/client": "^2.0.0"
-  },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-fs": "0.1.1-rc.2",
@@ -70,7 +67,6 @@
     "dsh-plugin",
     "mosh",
     "remote-execution",
-    "sam",
     "ssh"
   ],
   "engines": {

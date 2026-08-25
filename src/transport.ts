@@ -1,5 +1,5 @@
 /**
- * The transport seam: one remote execution world, three drivers.
+ * The transport seam: one remote execution world, two drivers.
  *
  * Consumers (fs, shell) program against this interface; drivers implement it.
  * Exported so third-party plugins can also consume `ctx.remoteTransport`.
@@ -27,7 +27,7 @@ export interface TransportExecRequest {
 
 export abstract class RemoteTransport extends Service {
   /** Driver identity for logs and diagnostics. */
-  abstract readonly driver: 'ssh' | 'mosh+ssh' | 'sam'
+  abstract readonly driver: 'ssh' | 'mosh+ssh'
 
   /** Run one command to completion; rejects only on infrastructure failure. */
   abstract exec(request: TransportExecRequest): Promise<TransportExecResult>
