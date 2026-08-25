@@ -1,24 +1,42 @@
 {
   "name": "@morewax/dsh-remote-exec",
-  "description": "Run DeepSeek Harness locally, execute on your server — ssh / mosh / sam transports with remote file and shell tools",
+  "description": "Run DeepSeek Harness locally, execute on your server \u2014 ssh / mosh / sam transports with remote file and shell tools",
   "version": "0.1.0",
   "license": "MIT",
   "type": "module",
-  "publishConfig": { "access": "public" },
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/moreWax/dsh-remote-exec.git"
   },
-  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
   "main": "lib/index.mjs",
   "types": "lib/index.d.mts",
   "exports": {
-    ".": { "types": "./lib/index.d.mts", "default": "./lib/index.mjs" },
-    "./invariant": { "types": "./lib/invariant.d.mts", "default": "./lib/invariant.mjs" },
+    ".": {
+      "types": "./lib/index.d.mts",
+      "default": "./lib/index.mjs"
+    },
+    "./invariant": {
+      "types": "./lib/invariant.d.mts",
+      "default": "./lib/invariant.mjs"
+    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
-  "files": ["lib/index.mjs", "lib/invariant.mjs", "cordis.patch.yml", "lib/*.d.mts", "lib/*.d.mts.map"],
+  "files": [
+    "lib/index.mjs",
+    "lib/invariant.mjs",
+    "cordis.patch.yml",
+    "lib/*.d.mts",
+    "lib/*.d.mts.map"
+  ],
   "scripts": {
     "build": "tsdown src/index.ts src/invariant.ts --format esm --dts --out-dir lib",
     "test": "vitest run",
@@ -32,7 +50,7 @@
     "@deepseek-ai/dsh-invariants": ">=0.0.1-rc.1"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0"
+    "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
