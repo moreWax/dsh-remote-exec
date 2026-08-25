@@ -23,6 +23,13 @@ transport.
 | `mosh` | via ssh | **native mosh** — roaming-safe, survives sleep | same as ssh |
 | `sam` | SAM mesh (MCP tools on a peer) | — (use mosh) | mesh identity; **zero local keys** |
 
+The sam driver speaks MCP through the **v2 TypeScript SDK** (`@modelcontextprotocol/client@^2`),
+which natively implements the **2026-07-28 specification** — the stateless protocol core (no
+initialize handshake, no `Mcp-Session-Id`, self-describing requests with `Mcp-Method`/`Mcp-Name`
+headers, MRTR for mid-call input, cacheable list results). Era negotiation is built in: it speaks
+2026-07-28 to modern servers and falls back to legacy-era revisions (2025-11-25 and older) for
+servers that haven't upgraded yet.
+
 The `sam` driver refuses to send credentials to any endpoint that does not
 prove it speaks the sam-node API — a foreign service squatting on the port
 fails the driver loudly instead of receiving your token.

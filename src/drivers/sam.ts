@@ -10,8 +10,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
+import type { StreamableHTTPClientTransportOptions } from '@modelcontextprotocol/client'
 import type { Context } from '@deepseek-ai/cordis'
 import { RemoteTransport } from '../transport.js'
 import type { TransportExecRequest, TransportExecResult } from '../transport.js'
@@ -86,15 +86,18 @@ export class SamTransport extends RemoteTransport {
     if (this.client !== undefined) return this.client
     await this.preflight()
     const client = new Client({ name: 'dsh-remote-exec', version: '0.1.0' })
-    const requestInit =
+    // NOTE: auth headers belong in options.requestInit.headers — passing them
+    // at the top level of the options object is silently ignored by the SDK
+    // (a latent bug the v2 types caught; v1 only compiled it via a cast).
+    const options: StreamableHTTPClientTransportOptions =
       this.token === undefined
         ? {}
-        : { headers: { 'X-Sam-Authentication': `Bearer ${this.token}` } }
-    const transport: Client['_transport'] = new StreamableHTTPClientTransport(
+        : { requestInit: { headers: { 'X-Sam-Authentication': `Bearer ${this.token}` } } }
+    const transport = new StreamableHTTPClientTransport(
       new URL(this.mcpUrl),
-      requestInit as ConstructorParameters<typeof StreamableHTTPClientTransport>[1],
+      options,
     )
-    await client.connect(transport as Parameters<NonNullable<Client['connect']>>[0])
+    await client.connect(transport)
     this.client = client
     return client
   }

@@ -50,7 +50,7 @@
     "@deepseek-ai/dsh-invariants": ">=0.0.1-rc.1"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0"
+    "@modelcontextprotocol/client": "^2.0.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
