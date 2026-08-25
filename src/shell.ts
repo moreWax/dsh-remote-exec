@@ -18,6 +18,7 @@ const MAX_OUTPUT = 200000
 const shq = shellQuote
 
 export class RemoteShell extends ShellExecutor {
+  get sandboxMode(): 'danger-full-access' { return 'danger-full-access' }
   declare readonly ctx: Context
 
   constructor(

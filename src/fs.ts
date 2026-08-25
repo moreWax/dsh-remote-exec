@@ -18,6 +18,7 @@ import type { RemoteTransport } from './transport.js'
 const q = shellQuote
 
 export class RemoteFileSystem extends FileSystem {
+  get sandboxMode(): 'danger-full-access' { return 'danger-full-access' }
   declare readonly ctx: Context
 
   constructor(
