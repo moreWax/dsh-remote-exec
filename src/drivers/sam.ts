@@ -15,6 +15,7 @@ import type { StreamableHTTPClientTransportOptions } from '@modelcontextprotocol
 import type { Context } from '@deepseek-ai/cordis'
 import { RemoteTransport } from '../transport.js'
 import type { TransportExecRequest, TransportExecResult } from '../transport.js'
+import { DEFAULT_TIMEOUT_MS } from '../config.js'
 
 export interface SamDriverConfig {
   mcpUrl?: string
@@ -62,8 +63,9 @@ export class SamTransport extends RemoteTransport {
     const origin = new URL(this.mcpUrl).origin
     let body: string
     try {
+      // This identity probe is deliberately anonymous. Credentials are only
+      // attached by the MCP transport after the endpoint proves its shape.
       const res = await fetch(new URL('/v1/models', origin), {
-        headers: this.token === undefined ? {} : { Authorization: `Bearer ${this.token}` },
         signal: AbortSignal.timeout(5000),
       })
       body = await res.text()
@@ -118,7 +120,7 @@ export class SamTransport extends RemoteTransport {
       command: request.command,
       workdir: request.workdir,
       stdin: request.stdin,
-      timeoutMs: request.timeoutMs ?? this.cfg.defaultTimeoutMs ?? 120000,
+      timeoutMs: request.timeoutMs ?? this.cfg.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS,
     })
   }
 

@@ -11,8 +11,9 @@ import type {
 } from '@deepseek-ai/dsh-shell'
 import { shellQuote } from './transport.js'
 import type { RemoteTransport } from './transport.js'
+import { DEFAULT_TIMEOUT_MS } from './config.js'
 
-const DEFAULT_TIMEOUT = 120000
+const DEFAULT_TIMEOUT = DEFAULT_TIMEOUT_MS
 const MAX_OUTPUT = 200000
 
 const shq = shellQuote

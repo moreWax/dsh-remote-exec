@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 import type { Context } from '@deepseek-ai/cordis'
 import { RemoteTransport, shellQuote, collect } from '../transport.js'
 import type { TransportExecRequest, TransportExecResult } from '../transport.js'
+import { DEFAULT_TIMEOUT_MS } from '../config.js'
 
 export interface SshDriverConfig {
   host: string
@@ -29,7 +30,14 @@ export class SshTransport extends RemoteTransport {
   /** With tailscale on, `tailscale ssh` authenticates by tailnet identity — no keys. */
   private baseCommand(): { bin: string; prefix: string[] } {
     if (this.cfg.tailscale) return { bin: 'tailscale', prefix: ['ssh'] }
-    return { bin: 'ssh', prefix: [...BASE_ARGS, ...this.cfg.sshArgs ?? []] }
+    return {
+      bin: 'ssh',
+      prefix: [
+        ...BASE_ARGS,
+        ...(this.cfg.port !== undefined ? ['-p', String(this.cfg.port)] : []),
+        ...this.cfg.sshArgs ?? [],
+      ],
+    }
   }
 
   private runChild(args: string[], opts: { stdin?: string | undefined } = {}): ChildProcessWithoutNullStreams {
@@ -45,7 +53,7 @@ export class SshTransport extends RemoteTransport {
     const preamble =
       request.workdir !== undefined ? `cd ${shellQuote(request.workdir)} || exit 97\n` : ''
     const child = this.runChild(['bash', '-s'], { stdin: `${preamble}${request.command}\n` })
-    return collect(child, request.timeoutMs ?? this.cfg.defaultTimeoutMs ?? 120000, request.signal)
+    return collect(child, request.timeoutMs ?? this.cfg.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS, request.signal)
   }
 
   async readFile(path: string, maxBytes: number, signal?: AbortSignal): Promise<Uint8Array> {
@@ -53,7 +61,7 @@ export class SshTransport extends RemoteTransport {
     const child = this.runChild(['bash', '-s'], {
       stdin: `head -c ${maxBytes} ${shellQuote(path)} | base64\n`,
     })
-    const r = await collect(child, this.cfg.defaultTimeoutMs ?? 120000, signal)
+    const r = await collect(child, this.cfg.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS, signal)
     if (r.exitCode !== 0) throw new Error(`ssh read failed (${r.exitCode}): ${r.stderr.slice(0, 400)}`)
     return new Uint8Array(Buffer.from(r.stdout.replace(/\s+/g, ''), 'base64'))
   }

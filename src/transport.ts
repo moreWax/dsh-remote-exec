@@ -53,35 +53,61 @@ export function shellQuote(s: string): string {
   return `'${s.replaceAll("'", `'\\''`)}'`
 }
 
+/** Stateful lifecycle owner for one spawned child. */
+class ChildCollector {
+  private stdout = ''
+  private stderr = ''
+  private timedOut = false
+  private settled = false
+  private timer: NodeJS.Timeout | undefined
+
+  constructor(
+    private readonly child: ChildProcess,
+    private readonly timeoutMs: number,
+    private readonly abortSignal?: AbortSignal,
+  ) {}
+
+  collect(): Promise<TransportExecResult> {
+    return new Promise((resolve) => {
+      const finish = (result: TransportExecResult): void => {
+        if (this.settled) return
+        this.settled = true
+        if (this.timer !== undefined) clearTimeout(this.timer)
+        this.abortSignal?.removeEventListener('abort', this.onAbort)
+        resolve(result)
+      }
+      this.child.stdout?.on('data', (data) => { this.stdout += String(data) })
+      this.child.stderr?.on('data', (data) => { this.stderr += String(data) })
+      this.child.once('error', (error) => finish({
+        exitCode: null, signal: null, stdout: this.stdout, stderr: String(error),
+      }))
+      this.child.once('close', (code, signal) => finish({
+        exitCode: this.timedOut ? null : code,
+        signal: this.timedOut || this.abortSignal?.aborted === true ? 'SIGTERM' : signal,
+        stdout: this.stdout,
+        stderr: this.timedOut
+          ? `${this.stderr}\n[dsh] killed after ${this.timeoutMs}ms timeout`
+          : this.stderr,
+      }))
+      this.abortSignal?.addEventListener('abort', this.onAbort, { once: true })
+      this.timer = setTimeout(() => {
+        this.timedOut = true
+        this.child.kill('SIGTERM')
+      }, this.timeoutMs)
+      if (this.abortSignal?.aborted === true) this.onAbort()
+    })
+  }
+
+  private readonly onAbort = (): void => {
+    if (!this.timedOut) this.child.kill('SIGTERM')
+  }
+}
+
 /** Collect a spawned child into a TransportExecResult with timeout + abort. */
 export function collect(
   child: ChildProcess,
   timeoutMs: number,
   signal?: AbortSignal,
 ): Promise<TransportExecResult> {
-  return new Promise((resolve) => {
-    let stdout = ''
-    let stderr = ''
-    let timedOut = false
-    const timer = setTimeout(() => { timedOut = true; child.kill('SIGTERM') }, timeoutMs)
-    const onAbort = () => { if (!timedOut) child.kill('SIGTERM') }
-    signal?.addEventListener('abort', onAbort, { once: true })
-    child.stdout?.on('data', (d) => { stdout += String(d) })
-    child.stderr?.on('data', (d) => { stderr += String(d) })
-    child.on('error', (e) => {
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', onAbort)
-      resolve({ exitCode: null, signal: null, stdout: '', stderr: String(e) })
-    })
-    child.on('close', (code, closingSignal) => {
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', onAbort)
-      resolve({
-        exitCode: timedOut ? null : code,
-        signal: timedOut || signal?.aborted === true ? 'SIGTERM' : closingSignal,
-        stdout,
-        stderr: timedOut ? `${stderr}\n[dsh] killed after ${timeoutMs}ms timeout` : stderr,
-      })
-    })
-  })
+  return new ChildCollector(child, timeoutMs, signal).collect()
 }

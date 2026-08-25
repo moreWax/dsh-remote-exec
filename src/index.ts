@@ -20,6 +20,7 @@ import { MoshTransport } from './drivers/mosh.js'
 import { SamTransport } from './drivers/sam.js'
 import { RemoteFileSystem } from './fs.js'
 import { RemoteShell } from './shell.js'
+import { sshConfig } from './config.js'
 
 export interface Config {
   /** Transport driver. Default 'ssh'. */
@@ -70,17 +71,7 @@ function buildTransport(ctx: Context, config: Config): RemoteTransport {
   switch (config.driver ?? 'ssh') {
     case 'ssh':
     case 'mosh': {
-      if (config.host === undefined) {
-        throw new Error(`driver ${config.driver ?? 'ssh'} requires config.host`)
-      }
-      const common = {
-        host: config.host,
-        ...(config.user !== undefined ? { user: config.user } : {}),
-        ...(config.port !== undefined ? { port: config.port } : {}),
-        ...(config.sshArgs !== undefined ? { sshArgs: config.sshArgs } : {}),
-        ...(config.tailscale !== undefined ? { tailscale: config.tailscale } : {}),
-        ...(config.defaultTimeoutMs !== undefined ? { defaultTimeoutMs: config.defaultTimeoutMs } : {}),
-      }
+      const common = sshConfig(config)
       if ((config.driver ?? 'ssh') === 'mosh') {
         return new MoshTransport(ctx, {
           ...common,
